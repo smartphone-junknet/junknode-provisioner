@@ -1,0 +1,332 @@
+---
+- name: Provision a JunkNet node via USB
+  hosts: pmos_usb
+  gather_facts: false
+
+  tasks:
+    - name: Gather only relevant facts
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - all_ipv4_addresses
+          - distribution
+          - mounts
+          - network
+
+    - name: Get the available space inside the root partition
+      ansible.builtin.set_fact:
+        root_available_space: >-
+          {{
+            (ansible_mounts
+            | selectattr("mount", "equalto", "/")
+            | list)[0].size_available
+          }}
+      changed_when: false
+
+    - name: Check for enough free space available in the root partition
+      ansible.builtin.assert:
+        that:
+          - root_available_space | int > required_root_space
+        fail_msg: Not enough free space available on the root partition
+      tags: check-free-space
+
+    - name: Get the platform architecture
+      ansible.builtin.set_fact:
+        architecture_result: >-
+          {{
+            ansible_architecture
+            | regex_replace('^x86_64', 'amd64')
+            | regex_replace('^aarch64', 'arm64')
+            | regex_replace('^armv7.*', 'armv7')
+          }}
+      changed_when: false
+
+    - name: Install Podman from stable repositories  # noqa jinja[spacing]
+      ansible.builtin.command:
+        cmd: >-
+          apk add --no-cache podman
+          --repository=http://dl-cdn.alpinelinux.org/alpine/v
+          {{- alpine_stable_branch }}/community
+      register: podman_apk_add
+      changed_when: podman_apk_add.rc == 0
+
+    - name: Enable CGroups V2 configuration parameter
+      ansible.builtin.lineinfile:
+        path: /etc/rc.conf
+        regexp: '^rc_cgroup_mode='
+        line: rc_cgroup_mode="unified"
+
+    - name: Run on boot the 'cgroups' service and start it now if not running
+      ansible.builtin.service:
+        name: cgroups
+        enabled: true
+        state: started
+
+    - name: Load on boot the 'tun' kernel module
+      ansible.builtin.lineinfile:
+        path: /etc/modules
+        line: tun
+
+    - name: Load now the 'tun' kernel module
+      community.general.modprobe:
+        name: tun
+        state: present
+
+    - name: Configure UID and GID remapping
+      ansible.builtin.lineinfile:
+        path: "/etc/{{ item.filename }}"
+        line: "{{ item.mapping }}"
+      loop:
+        - filename: subuid
+          mapping: 'junker:100000:65536'
+        - filename: subgid
+          mapping: 'junker:100000:65536'
+
+    - name: Download locally the Alpine-compatible GlibC  # noqa jinja[spacing]
+      ansible.builtin.unarchive:
+        src: >-
+          https://github.com/Procsiab/alpine-glibc-xb/releases/download/g
+          {{- glibc_alpine_version }}/apks-{{ url_architecture }}.zip
+        dest: /tmp
+        remote_src: true
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            ansible_architecture
+            if ansible_architecture == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Copy the GlibC APK to the managed host
+      ansible.builtin.copy:
+        src: /tmp/{{ url_architecture }}/glibc-{{ glibc_alpine_version }}-r0.apk
+        dest: /tmp
+        owner: junker
+        group: junker
+        mode: u=rw,g=r,o=r
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            ansible_architecture
+            if ansible_architecture == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Install the GlibC APK  # noqa jinja[spacing]
+      ansible.builtin.command:
+        cmd: >-
+          apk add --no-cache --force-overwrite --allow-untrusted /tmp/glibc-
+          {{- glibc_alpine_version }}-r0.apk
+      register: glibc_apk_add
+      changed_when: glibc_apk_add.rc == 0
+      vars:
+        url_architecture: >-
+          {{
+            ansible_architecture
+            if ansible_architecture == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Remove the APK install package from the managed host
+      ansible.builtin.file:
+        path: /tmp/glibc-{{ glibc_alpine_version }}-r0.apk
+        state: absent
+      changed_when: false
+
+    - name: Remove the downloaded artefact from local controller host
+      ansible.builtin.file:
+        path: /tmp/{{ url_architecture }}
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            ansible_architecture
+            if ansible_architecture == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Install libresolv replacement package 'libnsl'
+      community.general.apk:
+        name: libnsl
+        state: latest
+
+    - name: Download locally the Nomad binary  # noqa jinja[spacing]
+      ansible.builtin.unarchive:
+        src: >-
+          https://releases.hashicorp.com/nomad/
+          {{- nomad_version }}/nomad_{{ nomad_version }}_linux_
+          {{- url_architecture }}.zip
+        dest: /tmp
+        remote_src: true
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            'arm'
+            if architecture_result == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Create the local bin folder for user junker
+      ansible.builtin.file:
+        path: /home/junker/.local/bin
+        state: directory
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Copy the Nomad binary to the managed host
+      ansible.builtin.copy:
+        src: /tmp/nomad
+        dest: /home/junker/.local/bin/nomad
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+      notify: Restart Nomad
+
+    - name: Remove the downloaded artefact from local controller host
+      ansible.builtin.file:
+        path: /tmp/nomad
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Copy the bridge sysctl configuration file
+      ansible.builtin.copy:
+        src: ipforward.sysctl
+        dest: /etc/sysctl.d/ipforward.conf
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: Copy the Nomad configuration file
+      ansible.builtin.template:
+        src: nomad.hcl.j2
+        dest: /home/junker/nomad.hcl
+        owner: junker
+        group: junker
+        mode: u=rw,g=r,o=r
+      notify: Restart Nomad
+
+    - name: Download locally the Nomad driver for Podman binary  # noqa jinja[spacing]
+      ansible.builtin.unarchive:
+        src: >-
+          https://releases.hashicorp.com/nomad-driver-podman/
+          {{- nomad_driver_podman_version }}/nomad-driver-podman_
+          {{- nomad_driver_podman_version }}_linux_
+          {{- url_architecture }}.zip
+        dest: /tmp
+        remote_src: true
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            'arm'
+            if architecture_result == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Create the Nomad plugins folder for user junker
+      ansible.builtin.file:
+        path: /home/junker/nomad_data/plugins
+        state: directory
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Copy the Nomad driver plugin binary to the managed host
+      ansible.builtin.copy:
+        src: /tmp/nomad-driver-podman
+        dest: /home/junker/nomad_data/plugins/nomad-driver-podman
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+      notify: Restart Nomad
+
+    - name: Remove the downloaded artefact from local controller host
+      ansible.builtin.file:
+        path: /tmp/nomad-driver-podman
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Create the junker user service folder
+      ansible.builtin.file:
+        path: /home/junker/init.d
+        state: directory
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Copy the rootless Podman service file
+      ansible.builtin.copy:
+        src: podman-junker
+        dest: /home/junker/init.d/podman-junker
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Link the user service file inside the system folder
+      ansible.builtin.file:
+        src: /home/junker/init.d/podman-junker
+        dest: /etc/init.d/podman-junker
+        state: link
+
+    - name: Run on boot the 'podman-junker' service and start it now if not running
+      ansible.builtin.service:
+        name: podman-junker
+        enabled: true
+        state: started
+
+    - name: Copy the firewall rules for Nomad ports
+      ansible.builtin.copy:
+        src: nomad.nft
+        dest: /etc/nftables.d/90_nomad.nft
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+      notify: Restart NFtables firewall  # noqa no-handler
+
+    - name: Copy the user Nomad service file
+      ansible.builtin.copy:
+        src: nomad-junker
+        dest: /home/junker/init.d/nomad-junker
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Link the user service file inside the system folder
+      ansible.builtin.file:
+        src: /home/junker/init.d/nomad-junker
+        dest: /etc/init.d/nomad-junker
+        state: link
+
+    - name: Run on boot the 'nomad-junker' service and start it now if not running
+      ansible.builtin.service:
+        name: nomad-junker
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart NFtables firewall
+      ansible.builtin.service:
+        name: nftables
+        state: restarted
+
+    - name: Restart Nomad
+      ansible.builtin.service:
+        name: nomad-junker
+        state: restarted

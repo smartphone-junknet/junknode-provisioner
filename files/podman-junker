@@ -1,0 +1,5 @@
+#!/sbin/openrc-run
+
+podman_user="junker"
+
+source "/etc/init.d/podman"

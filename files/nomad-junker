@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+ 
+name=$RC_SVCNAME
+description="Nomad"
+supervisor="supervise-daemon"
+command="/home/junker/.local/bin/nomad"
+command_args="agent -config /home/junker/nomad.hcl"
+command_user="junker:junker"
+
+depend() {
+        after network-online
+        use net
+}
+
+reload() {
+        ebegin "Reloading $RC_SVCNAME"
+        /bin/kill -HUP $MAINPID
+        eend $?
+}

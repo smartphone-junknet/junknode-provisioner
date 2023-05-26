@@ -1,0 +1,32 @@
+# System configuration
+datacenter = "junknet"
+data_dir = "/home/junker/nomad_data"
+log_file = "/home/junker/nomad.log"
+
+# Network settings
+bind_addr = "0.0.0.0"
+server {
+  enabled = true
+  bootstrap_expect = 1
+  encrypt = "{{ vault_nomad_gossip_key }}"
+}
+
+# Worker settings
+client {
+  enabled = true
+  servers = ["127.0.0.1:4647"]
+  options = {
+    "driver.allowlist" = "podman"
+  }
+}
+
+# Podman settings
+plugin "nomad-driver-podman" {
+  config {
+    socket_path = "unix:///tmp/podman-run-10000/podman/podman.sock"
+    volumes {
+      enabled = true
+      selinuxlabel = "z"
+    }
+  }
+}

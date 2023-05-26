@@ -1,0 +1,14 @@
+---
+all:
+  hosts:
+    pmos_usb:
+      ansible_host: '172.16.42.1'
+      ansible_user: junker
+      ansible_password: "{{ vault_junker_password }}"
+      ansible_ssh_common_args: >-
+        -o PasswordAuthentication=yes
+        -o PubkeyAuthentication=no
+        -o UserKnownHostsFile=/dev/null
+        -o StrictHostKeyChecking=no
+      ansible_become_user: root
+      ansible_become_password: "{{ vault_junker_password }}"

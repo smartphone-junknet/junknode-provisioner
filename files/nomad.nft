@@ -1,0 +1,12 @@
+#!/usr/sbin/nft -f
+
+table inet filter {
+    chain input {
+        # allow Nomad
+        tcp dport 4646 accept comment "accept Nomad HTTP"
+        tcp dport 4647 accept comment "accept Nomad RPC"
+        tcp dport 4648 accept comment "accept Nomad Serf TCP"
+        udp dport 4648 accept comment "accept Nomad Serf UDP"
+        tcp dport 20000-32000 accept comment "accept Nomad dynamic ports"
+    }
+}
