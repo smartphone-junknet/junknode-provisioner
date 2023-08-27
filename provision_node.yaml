@@ -300,6 +300,26 @@
         mode: u=rwx,g=rx,o=rx
       notify: Restart NFtables firewall  # noqa no-handler
 
+    - name: Copy the Nomad user slice service file
+      ansible.builtin.copy:
+        src: nomad-slice
+        dest: /home/junker/init.d/nomad-slice
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Link the user service file inside the system folder
+      ansible.builtin.file:
+        src: /home/junker/init.d/nomad-slice
+        dest: /etc/init.d/nomad-slice
+        state: link
+
+    - name: Run on boot the 'nomad-slice' service and start it now if not running
+      ansible.builtin.service:
+        name: nomad-slice
+        enabled: true
+        state: started
+
     - name: Copy the user Nomad service file
       ansible.builtin.copy:
         src: nomad-junker

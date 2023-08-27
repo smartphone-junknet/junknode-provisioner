@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+ 
+name=$RC_SVCNAME
+description="Create cgroup slice folder for Nomad"
+supervisor="supervise-daemon"
+command="/bin/mkdir"
+command_args="-p /sys/fs/cgroup/nomad.slice"
+command_user="root:root"
+
+extra_commands="change_permission_nomad_user"
+description_change_permission_nomad_user="Change the owner of the nomad.slice folder to junker"
+
+change_permission_nomad_user() {
+        ebegin "Change the owner of the nomad.slice folder to junker"
+        chown -R junker:junker /sys/fs/cgroup/nomad.slice
+        eend $?
+}
+
+depend() {
+        after network-online
+}
+
+start_post() {
+        change_permission_nomad_user
+}

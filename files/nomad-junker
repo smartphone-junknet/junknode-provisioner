@@ -9,6 +9,7 @@ command_user="junker:junker"
 
 depend() {
         after network-online
+        need nomad-slice
         use net
 }
 
