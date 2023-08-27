@@ -1,6 +1,6 @@
 ---
 required_root_space: 250000000  # 250 MB
-alpine_stable_branch: '3.17'
-glibc_alpine_version: '2.36'
-nomad_version: '1.5.3'
-nomad_driver_podman_version: '0.4.2'
+alpine_stable_branch: '3.18'
+glibc_alpine_version: '2.38'
+nomad_version: '1.6.1'
+nomad_driver_podman_version: '0.5.1'
