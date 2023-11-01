@@ -201,6 +201,40 @@
       become: false
       changed_when: false
 
+    - name: Download locally the Nomad Pack binary  # noqa jinja[spacing]
+      ansible.builtin.unarchive:
+        src: >-
+          https://github.com/hashicorp/nomad-pack/releases/download/nightly/nomad-pack_
+          {{- nomad_pack_version }}_linux_{{ url_architecture }}.zip
+        dest: /tmp
+        remote_src: true
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      vars:
+        url_architecture: >-
+          {{
+            'arm'
+            if architecture_result == 'armv7'
+            else architecture_result
+          }}
+
+    - name: Copy the Nomad Pack binary to the managed host
+      ansible.builtin.copy:
+        src: /tmp/nomad-pack
+        dest: /home/junker/.local/bin/nomad-pack
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Remove the downloaded artefact from local controller host
+      ansible.builtin.file:
+        path: /tmp/nomad-pack
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
     - name: Copy the bridge sysctl configuration file
       ansible.builtin.copy:
         src: ipforward.sysctl
@@ -290,6 +324,14 @@
         name: podman-junker
         enabled: true
         state: started
+
+    - name: Create the host volume directory for container persistence
+      ansible.builtin.file:
+        path: /opt/volumes
+        state: directory
+        owner: junker
+        group: junker
+        mode: u=rwx,g=rx,o=rx
 
     - name: Copy the firewall rules for Nomad ports
       ansible.builtin.copy:

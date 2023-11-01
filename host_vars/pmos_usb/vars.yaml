@@ -2,5 +2,6 @@
 required_root_space: 250000000  # 250 MB
 alpine_stable_branch: '3.18'
 glibc_alpine_version: '2.38'
-nomad_version: '1.6.1'
+nomad_version: '1.6.3'
+nomad_pack_version: '0.0.1-techpreview.4'
 nomad_driver_podman_version: '0.5.1'

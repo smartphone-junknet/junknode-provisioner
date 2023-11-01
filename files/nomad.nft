@@ -8,5 +8,7 @@ table inet filter {
         tcp dport 4648 accept comment "accept Nomad Serf TCP"
         udp dport 4648 accept comment "accept Nomad Serf UDP"
         tcp dport 20000-32000 accept comment "accept Nomad dynamic ports"
+        tcp dport 9000-9100 accept comment "accept Nomad static ports TCP"
+        udp dport 9000-9100 accept comment "accept Nomad static ports UDP"
     }
 }

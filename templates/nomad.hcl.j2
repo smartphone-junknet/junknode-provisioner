@@ -16,7 +16,7 @@ client {
   enabled = true
   servers = ["127.0.0.1:4647"]
   options = {
-    "driver.allowlist" = "podman"
+    "driver.allowlist" = "podman,raw_exec"
   }
 }
 
@@ -28,5 +28,10 @@ plugin "nomad-driver-podman" {
       enabled = true
       selinuxlabel = "z"
     }
+  }
+}
+plugin "raw_exec" {
+  config {
+    enabled = true
   }
 }
