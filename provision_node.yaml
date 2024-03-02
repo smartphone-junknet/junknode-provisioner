@@ -41,6 +41,14 @@
           }}
       changed_when: false
 
+    - name: Copy the local service file to share the root mount point for Podman
+      ansible.builtin.copy:
+        src: 01-podman-sharedroot.start
+        dest: /etc/local.d/01-podman-sharedroot.start
+        owner: root
+        group: root
+        mode: u=rwx,g=rx,o=rx
+
     - name: Install Podman from stable repositories  # noqa jinja[spacing]
       ansible.builtin.command:
         cmd: >-
