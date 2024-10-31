@@ -94,7 +94,7 @@
       ansible.builtin.unarchive:
         src: >-
           https://github.com/Procsiab/alpine-glibc-xb/releases/download/g
-          {{- glibc_alpine_version }}/apks-{{ url_architecture }}.zip
+          {{- glibc_alpine_version }}/{{ url_architecture }}.zip
         dest: /tmp
         remote_src: true
       delegate_to: localhost
@@ -183,6 +183,7 @@
             if architecture_result == 'armv7'
             else architecture_result
           }}
+      tags: fetch-from-internet
 
     - name: Create the local bin folder for user junker
       ansible.builtin.file:
@@ -208,12 +209,14 @@
       delegate_to: localhost
       become: false
       changed_when: false
+      tags: fetch-from-internet
 
     - name: Download locally the Nomad Pack binary  # noqa jinja[spacing]
       ansible.builtin.unarchive:
         src: >-
-          https://github.com/hashicorp/nomad-pack/releases/download/nightly/nomad-pack_
-          {{- nomad_pack_version }}_linux_{{ url_architecture }}.zip
+          https://releases.hashicorp.com/nomad-pack/
+          {{- nomad_pack_version }}/nomad-pack_{{ nomad_pack_version }}_linux_
+          {{- url_architecture }}.zip
         dest: /tmp
         remote_src: true
       delegate_to: localhost
@@ -226,6 +229,7 @@
             if architecture_result == 'armv7'
             else architecture_result
           }}
+      tags: fetch-from-internet
 
     - name: Copy the Nomad Pack binary to the managed host
       ansible.builtin.copy:
@@ -242,6 +246,7 @@
       delegate_to: localhost
       become: false
       changed_when: false
+      tags: fetch-from-internet
 
     - name: Copy the bridge sysctl configuration file
       ansible.builtin.copy:
@@ -279,6 +284,7 @@
             if architecture_result == 'armv7'
             else architecture_result
           }}
+      tags: fetch-from-internet
 
     - name: Create the Nomad plugins folder for user junker
       ansible.builtin.file:
@@ -304,6 +310,7 @@
       delegate_to: localhost
       become: false
       changed_when: false
+      tags: fetch-from-internet
 
     - name: Create the junker user service folder
       ansible.builtin.file:
@@ -326,6 +333,12 @@
         src: /home/junker/init.d/podman-junker
         dest: /etc/init.d/podman-junker
         state: link
+
+    - name: Set the /tmp cleanup for every file at every reboot
+      ansible.builtin.lineinfile:
+        path: /etc/conf.d/bootmisc
+        regexp: '^wipe_tmp='
+        line: wipe_tmp="YES"
 
     - name: Run on boot the 'podman-junker' service and start it now if not running
       ansible.builtin.service:

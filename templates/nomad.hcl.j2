@@ -23,7 +23,7 @@ client {
 # Podman settings
 plugin "nomad-driver-podman" {
   config {
-    socket_path = "unix:///tmp/podman-run-10000/podman/podman.sock"
+    socket_path = "unix:///tmp/storage-run-10000/podman/podman.sock"
     volumes {
       enabled = true
       selinuxlabel = "z"
